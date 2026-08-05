@@ -1,0 +1,123 @@
+---
+title: "Reproducible Research: Peer Assessment 1"
+output: 
+  html_document:
+    keep_md: true
+---
+
+
+
+### Call out necessary packages
+
+
+``` r
+    library(dplyr)
+    library(ggplot2)
+    library(lubridate)
+```
+
+
+### Function hist_and_stats 
+#### Created for repeated generation of histogram and stats data with and without NAs 
+
+``` r
+hist_and_stats <- function(my_csv){
+    date_step <- with(my_csv, sapply(split(steps, date), sum, na.rm = TRUE))
+    h <- hist(date_step, breaks = 5, plot = FALSE)
+    h <- hist(date_step, breaks = 5, ylim = c(0, max(h$counts)), 
+         main = "Steps Taken per Day", xlab = "Steps", xaxt = "n", yaxt ="n")
+    axis(2, at = seq(0, max(h$counts), by = 2))
+    axis(1, at = h$breaks)
+    text(h$mids, h$counts, labels = h$counts, pos = 1)
+    cat("\n\n#### What are mean and median total number of steps taken per day?\n")
+    print(paste0("Mean = ", round(mean(date_step, na.rm = TRUE)), "; Median = ", median(date_step, na.rm = TRUE)))
+}
+```
+
+
+### Loading and preprocessing the data
+
+``` r
+    my_csv <- read.csv("activity.csv")
+```
+
+### Histogram of the total number of steps taken each day
+
+``` r
+    hist_and_stats(my_csv)
+```
+
+![plot of chunk unnamed-chunk-4](figure/unnamed-chunk-4-1.png)
+
+#### What are mean and median total number of steps taken per day?
+[1] "Mean = 9354; Median = 10395"
+
+
+### What is the average daily activity pattern?
+
+``` r
+    five_min <- with(my_csv, sapply(split(steps, interval), mean, na.rm = TRUE))
+    plot(as.numeric(names(five_min)), five_min, type = "l", main = "Average Steps per 5-min Interval", ylab = "Steps", xlab = "Interval")
+```
+
+![plot of chunk unnamed-chunk-5](figure/unnamed-chunk-5-1.png)
+
+``` r
+    print(paste0("The 5-minute interval that, on average, contains the maximum number of steps = ", names(which.max(five_min))))
+```
+
+```
+## [1] "The 5-minute interval that, on average, contains the maximum number of steps = 835"
+```
+
+
+### Imputing missing values
+Missing values are counted, and then imputed by the median of the specific interval.
+
+``` r
+    print(paste0("Count of missing values = ",sum(is.na(my_csv))))
+```
+
+```
+## [1] "Count of missing values = 2304"
+```
+
+``` r
+    my_csv <- my_csv %>% group_by(interval) %>% mutate(steps = ifelse(is.na(steps), median(steps, na.rm=TRUE), steps))
+```
+
+### Histogram of the total number of steps taken each day after missing values are imputed
+
+``` r
+    hist_and_stats(my_csv)
+```
+
+![plot of chunk unnamed-chunk-7](figure/unnamed-chunk-7-1.png)
+
+#### What are mean and median total number of steps taken per day?
+[1] "Mean = 9504; Median = 10395"
+
+The mean of the dataset changed, with the frequency and median remain unchanged.
+
+
+#### Add weekofday factors and summarise
+
+``` r
+    my_csv <- my_csv %>% mutate(weekofday = factor(ifelse(wday(date, week_start = 1) >= 6, "weekend", "weekday"), c("weekend","weekday")))
+    wk_df <- my_csv %>%
+        group_by(interval, weekofday) %>%
+        summarise(steps = mean(steps), .groups = "drop")
+```
+
+#### Are there differences in activity patterns between weekdays and weekends?
+
+``` r
+    ggplot(wk_df, aes(x = interval, y = steps)) +
+        geom_line(color = "blue") +
+        facet_wrap(~ weekofday, ncol = 1, strip.position = "top") +
+        labs(x = "Interval", y = "Average Steps per Interval ") +
+        theme(strip.background = element_rect(fill = "peachpuff"),
+            panel.background = element_rect(fill = "white"))
+```
+
+![plot of chunk unnamed-chunk-9](figure/unnamed-chunk-9-1.png)
