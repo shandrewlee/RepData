@@ -1,0 +1,72 @@
+suppressMessages(library(dplyr))
+suppressMessages(library(ggplot2))
+
+report <- function(agg_tbl, scope){
+    top_items <- agg_tbl %>%
+        slice_max(order_by = figure, n = 9)
+    others <- agg_tbl %>%
+        slice(-(1:9)) %>%
+        summarise(EVTYPE = "OTHERS", figure = sum(figure)) 
+    tbl <- bind_rows(top_items, others) %>%
+        mutate(percentage = 100 * figure / sum(figure))
+    
+    print(paste0('Total number of events: ', length(agg_tbl$EVTYPE)))
+    print(paste0('Events with Zero impact: ', sum(agg_tbl$figure == 0)))
+    print(paste0('Events with impact: ', sum(agg_tbl$figure != 0)))
+    
+    print(paste0('The Event Impacting ',scope, ' the Most is ', top_items$EVTYPE[which.max(top_items$figure)]))
+    
+    ggplot(tbl, aes(x = reorder(EVTYPE, percentage), y = percentage)) +
+        geom_bar(stat = "identity", fill = "cyan") +
+        geom_text(aes(label = paste0(round(percentage, 1), "%")), hjust = 0.5, size = 3) +
+        coord_flip() +
+        labs(title = paste0("Top 10 Events Impacting ", scope), x = "Event Type", y = "Percentage") +
+        theme_minimal(base_size = 10)
+}
+
+
+proj_2 <- function(data){
+    url <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+    zip_file <- "stormdata.bz2"
+    if (!file.exists(zip_file)){
+        download.file(url, zip_file, mode="wb")
+    }
+    data <- read.csv(bzfile(zip_file))
+    
+    data <- data %>% 
+        select(EVTYPE, FATALITIES, INJURIES, PROPDMG, PROPDMGEXP, CROPDMG, CROPDMGEXP)
+
+    suppressWarnings(
+        data <- data %>%
+            filter(!PROPDMGEXP %in% c('?','-')) %>%
+            mutate(PROPDMG = case_when(
+                PROPDMGEXP %in% c('0','1','2','3','4','5','6','7','8') ~ PROPDMG * 10 + as.numeric(PROPDMGEXP),
+                PROPDMGEXP %in% c('H','h') ~ PROPDMG * 100,
+                PROPDMGEXP %in% c('K','k') ~ PROPDMG * 1e+03,
+                PROPDMGEXP %in% c('M','m') ~ PROPDMG * 1e+06,
+                PROPDMGEXP %in% c('B','b') ~ PROPDMG * 1e+09,
+                TRUE ~ PROPDMG))
+    )
+    
+    suppressWarnings(
+        data <- data %>%
+            filter(!CROPDMGEXP %in% c('?','-')) %>%
+            mutate(CROPDMG = case_when(
+                CROPDMGEXP %in% c('0','1','2','3','4','5','6','7','8') ~ CROPDMG * 10 + as.numeric(CROPDMGEXP),
+                CROPDMGEXP %in% c('H','h') ~ CROPDMG * 100,
+                CROPDMGEXP %in% c('K','k') ~ CROPDMG * 1e+03,
+                CROPDMGEXP %in% c('M','m') ~ CROPDMG * 1e+06,
+                CROPDMGEXP %in% c('B','b') ~ CROPDMG * 1e+09,
+                TRUE ~ CROPDMG))
+    )
+
+    ## Report
+    evt_health <- data %>% group_by(EVTYPE) %>% 
+        summarise(figure = sum(FATALITIES + INJURIES, na.rm = TRUE), .groups = "drop")
+    evt_econ <- data %>% group_by(EVTYPE) %>% 
+        summarise(figure = sum(PROPDMG + CROPDMG, na.rm = TRUE), .groups = "drop")
+    
+    report(evt_health, 'Health')
+    report(evt_econ, 'Economy')
+}
+
