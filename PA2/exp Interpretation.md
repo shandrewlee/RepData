@@ -60,6 +60,7 @@ The corresponding event is confirmed by comparing BGN_TIME with the Start Time o
 |BGN_DATE           |BGN_TIME |BGN_LOCATI |COUNTYNAME                 |STATE |EVTYPE    | PROPDMG|PROPDMGEXP | CROPDMG|CROPDMGEXP |
 |:------------------|:--------|:----------|:--------------------------|:-----|:---------|-------:|:----------|-------:|:----------|
 |12/12/1995 0:00:00 |1000     |           |ORZ004 - 05 - 06 - 08 - 09 |OR    |HIGH WIND |      15|-          |       0|           |
+
 The event is not found in the webpage, and thus neglected.
 <br>
 
@@ -100,6 +101,7 @@ The event is not found in the webpage, and thus neglected.
 |2/16/1995 0:00:00 |0600     |Swain/Haywood     |NCZ001>002 - 18 |NC    |FLOOD/FLASH FLOOD  |       0|?          |
 |8/26/1995 0:00:00 |2215     |Greer and Cowpens |SPARTANBURG     |SC    |FLOOD/FLASH FLOOD  |       0|?          |
 |4/17/1995 0:00:00 |2106     |Laredo            |WEBB            |TX    |THUNDERSTORM WINDS |       0|?          |
+
 For all events, the coefficients are all zeros and thus neglected.
 <br><br>
 
@@ -119,6 +121,7 @@ Items checked: <br>
 |:-----------------|:--------|:---------------|:------------------|:-----|:------------------|-------:|:----------|
 |6/5/1995 0:00:00  |1304     |Extreme Western |NVZ003 - 004 - 007 |NV    |TORNADO            |      60|+          |
 |7/15/1995 0:00:00 |0630     |Red Hook        |DUTCHESS           |NY    |THUNDERSTORM WINDS |      20|           |
+
 The values for NV and NY in the website are 0.06K and 0.02K respectively.<br>
 The results showed the '' and '+' are treating as exponent of 1.<br><br>
 
@@ -147,6 +150,7 @@ Since the figures need to validate up to unit place, the csv file is required. T
 |:-----------------|--------:|:----------|:----------|:-----|:------------------|-------:|:----------|-----------:|
 |5/27/1995 0:00:00 |     1620|St.Rose    |CLINTON    |IL    |THUNDERSTORM WINDS |      24|6          |         246|
 |5/27/1995 0:00:00 |     1715|White Hall |GREENE     |IL    |TORNADO            |      14|5          |         145|
+
 The table demonstrates that when EXP entries are numeric, the exact figure should be calculated as:<br>
 
 #### coefficient * 10 + exponent
