@@ -1,0 +1,111 @@
+---
+title: "Exponent Fields Interpretation"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+In the study of economic impact of various events, the property damage and crop damage are defined by 4 fields:  
+- PROPDMG  
+- PROPDMGEXP  
+- CROPDMG  
+- CROPDMGEXP  
+
+Where PROPDMG and CROPDMG provide the coefficient, while PROPDMGEXP and CROPDMGEXP define the exponent of the coefficients.
+
+However, since there is some ambiguity with the EXP entries, this report is to illustrate the interpretation of the values.
+
+```{r, cache=TRUE, echo=FALSE}
+    url <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+    zip_file <- "stormdata.bz2"
+    if (!file.exists(zip_file)){
+        download.file(url, zip_file, mode="wb")
+        }
+    data <- read.csv(bzfile(zip_file))
+    data <- data %>% 
+        select(BGN_DATE, BGN_TIME, BGN_LOCATI, COUNTYNAME, STATE, EVTYPE, FATALITIES, INJURIES, PROPDMG, PROPDMGEXP, CROPDMG, CROPDMGEXP)
+```
+<br>
+## Possible Entries in both EXP fields:  
+```{r}
+    sort(unique(c(data$PROPDMGEXP, data$CROPDMGEXP)))
+```
+  
+The entries below are trivial:  
+"h" "H": Hundred  
+"k" "K": Thousand  
+"m" "M": Million  
+"B": Billion  
+  
+The entries below are of conern:  
+""  "-" "?" "+" "0" "1" "2" "3" "4" "5" "6" "7" "8"  
+<br>
+
+## Entries Analysis
+The analysis is done by comparing the zip data with the data published in **[NOAA Website](https://www.ncei.noaa.gov/stormevents/)**.
+During sample check, the search criteria is defined by STATE and BGN_TIME.  
+<img src="scrnshot.png" width="40%"/>   
+
+The corresponding event is confirmed by comparing BGN_TIME with the Start Time of the webpage result.
+<br><br>
+
+```{r,echo=FALSE}
+    suppressMessages(library(dplyr))
+    suppressMessages(library(knitr))
+    extract <- select(data, -FATALITIES, -INJURIES)
+```
+
+#### Entries '-', '?':
+```{r}
+    partition <- arrange(subset(extract, PROPDMGEXP == '-' | CROPDMGEXP == '-'), STATE)
+    kable(partition, row.names = FALSE)
+```
+The event is not found in the webpage, and thus neglected.
+<br>
+
+```{r}
+    extract_prop <- select(extract, -CROPDMG, -CROPDMGEXP)
+    partition <- arrange(subset(extract_prop, PROPDMGEXP == '?'), STATE)
+    kable(partition, row.names = FALSE)
+    
+    extract_crop <- select(extract, -PROPDMG, -PROPDMGEXP)
+    partition <- arrange(subset(extract_crop, CROPDMGEXP == '?'), STATE)
+    kable(partition, row.names = FALSE)
+```
+For all events, the coefficients are all zeros and thus neglected.
+<br><br>
+
+#### Entries '', '+':
+Items checked: <br>
+6/5/1995 NV for '+'; 7/15/1995 NY for '' <br>
+```{r}
+    partition <- subset(extract_prop, PROPDMGEXP %in% c('','+') & PROPDMG > 10 & 
+                            ((STATE == 'NV' & BGN_DATE == '6/5/1995 0:00:00') | (STATE == 'NY' & BGN_DATE == '7/15/1995 0:00:00')) )
+    kable(partition, row.names = FALSE)
+```
+The values for NV and NY in the website are 0.06K and 0.02K respectively.<br>
+The results showed the '' and '+' are treating as exponent of 1.<br><br>
+
+#### Entries '0'...'8':
+Since the figures need to validate up to unit place, the csv file is required. The csv file is saved as 'web_csv'.<br>
+<img src="csv_dl.png" width="80%"/>   
+```{r}
+    partition <- subset(extract_prop, PROPDMGEXP %in% c('5','6') & STATE == 'IL')
+    partition$BGN_TIME <- as.numeric(partition$BGN_TIME)
+    partition <- arrange(partition, desc(PROPDMGEXP))
+    
+    web_csv <- read.csv('web_csv.csv')
+    web_csv$CZ_NAME_STR <- gsub(' CO.', '', web_csv$CZ_NAME_STR)
+    
+    db <- inner_join(partition, web_csv, by = c('COUNTYNAME' = 'CZ_NAME_STR', 'BGN_TIME' = 'BEGIN_TIME'))
+    db <- db[,c('BGN_DATE',	'BGN_TIME',	'BGN_LOCATI', 'COUNTYNAME',	'STATE', 'EVTYPE', 'PROPDMG', 'PROPDMGEXP', 'DAMAGE_PROPERTY_NUM')]
+    db <- rename(db, WEBPAGE_FIG = DAMAGE_PROPERTY_NUM)
+    
+    kable(db, rows.names = FALSE)
+```
+The table demonstrates that when EXP entries are numeric, the exact figure should be calculated as:<br>
+
+#### coefficient * 10 + exponent
