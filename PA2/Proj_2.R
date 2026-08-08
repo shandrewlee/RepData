@@ -24,6 +24,54 @@ report <- function(agg_tbl, scope){
         theme_minimal(base_size = 10)
 }
 
+std_grammar <- function(data){
+    data$EVTYPE <- toupper(data$EVTYPE)
+    
+    data$EVTYPE <- str_replace_all(data$EVTYPE, " {2,}", " ")
+    
+    thunderstorm_typo <- 'T.*U.*E.*M WIN.*'
+    data$EVTYPE[str_detect(toupper(data$EVTYPE), thunderstorm_typo)] <- 'THUNDERSTORM WIND'
+    
+    
+    web_keyword <- c('ASTRONOMICAL LOW TIDE', 'AVALANCHE', 'BLIZZARD', 'COASTAL FLOOD', 'COLD/WINDHILL',
+                     'DEBRIS FLOW', 'DENSE FOG', 'DENSE SMOKE', 'DROUGHT', 'DUST DEVIL', 'DUST STORM',
+                     'EXCESSIVE HEAT', 'EXTREMEOLD/WINDHILL', 'FLASH FLOOD', 'FLOOD', 'FREEZING FOG', 'FROST/FREEZE', 'FUNNEL CLOUD',
+                     'HAIL', 'HEAT', 'HEAVY RAIN', 'HEAVY SNOW', 'HIGH SURF', 'HIGH WIND', 'HURRICANE (TYPHOON)', 'ICE STORM',
+                     'LAKE-EFFECT SNOW', 'LAKESHORE FLOOD', 'LIGHTNING', 'MARINE HAIL', 'MARINE HIGH WIND', 'MARINE STRONG WIND',
+                     'MARINE THUNDERSTORM WIND', 'RIP CURRENT', 'SEICHE', 'SLEET', 'STORM SURGE/TIDE', 'STRONG WIND', 'THUNDERSTORM WIND',
+                     'TORNADO', 'TROPICAL DEPRESSION', 'TROPICAL STORM', 'TSUNAMI', 'VOLCANIC ASH', 'WATERSPOUT', 'WILDFIRE',
+                     'WINTER STORM', 'WINTER WEATHER')
+    #data$EVTYPE <- toupper(data$EVTYPE)
+    matches <- str_extract(toupper(data$EVTYPE), paste(web_keyword, collapse = "|"))
+    data$EVTYPE <- ifelse(!is.na(matches), matches, data$EVTYPE)
+    top_set <- data[data$EVTYPE %in% web_keyword,]
+    bottom_set <- data[!data$EVTYPE %in% web_keyword,]
+    
+    
+    custom_keyword <- c('MICROBURST' = 'MICROBURST', 'AVALAN' = 'AVALANCHE',
+                        'TSTM' = 'THUNDERSTORM WIND', 'THUNDERSTORM' = 'THUNDERSTORM WIND', 
+                        'TYPHOON' = 'HURRICANE (TYPHOON)', 'HURRICANE' = 'HURRICANE (TYPHOON)',
+                        'WET' = 'WET', 'RAIN' = 'RAIN', 'SNOW' = 'SNOW', 'SHOWER' = 'SHOWER', 
+                        'MUD' = 'MUDSLIDE', 'LANDSLIDE' = 'LANDSLIDE', 'URBAN' = 'URBAN/SMALL STREAM', 'WND' = 'WIND',
+                        'COLD' = 'COLD','LOW TEMP' = 'COLD', 'HYPOTHERMIA' = 'COLD', 'FREEZING' = 'FREEZING',
+                        'HYPERTHERMIA' = 'HEAT', 'HIGH TEMP' = 'HEAT','WARM' = 'HEAT', 'HOT' = 'HEAT')
+    
+    matches <- str_extract((bottom_set$EVTYPE), paste(names(custom_keyword), collapse = "|"))
+    bottom_set$EVTYPE <- ifelse(!is.na(matches), custom_keyword[matches], bottom_set$EVTYPE)
+    
+    bottom_set <- bottom_set[!grepl(".*county.*", bottom_set$EVTYPE, ignore.case = TRUE), ]
+    bottom_set <- bottom_set[!grepl("^summary", bottom_set$EVTYPE, ignore.case = TRUE), ]
+    bottom_set <- bottom_set[!grepl("^record", bottom_set$EVTYPE, ignore.case = TRUE), ]
+    bottom_set <- bottom_set[!grepl("^monthly", bottom_set$EVTYPE, ignore.case = TRUE), ]
+    bottom_set <- bottom_set[!bottom_set$EVTYPE %in% c('?','NONE'), ]
+    
+    # 
+    data <- top_set
+    data <- bind_rows(data, bottom_set)
+    
+}
+
+
 
 proj_2 <- function(data){
     url <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
@@ -32,9 +80,12 @@ proj_2 <- function(data){
         download.file(url, zip_file, mode="wb")
     }
     data <- read.csv(bzfile(zip_file))
-    
+
     data <- data %>% 
         select(EVTYPE, FATALITIES, INJURIES, PROPDMG, PROPDMGEXP, CROPDMG, CROPDMGEXP)
+    
+    data <- std_grammar(data)
+    
 
     suppressWarnings(
         data <- data %>%
@@ -47,7 +98,7 @@ proj_2 <- function(data){
                 PROPDMGEXP %in% c('B','b') ~ PROPDMG * 1e+09,
                 TRUE ~ PROPDMG))
     )
-    
+
     suppressWarnings(
         data <- data %>%
             filter(!CROPDMGEXP %in% c('?','-')) %>%
@@ -61,12 +112,14 @@ proj_2 <- function(data){
     )
 
     ## Report
-    evt_health <- data %>% group_by(EVTYPE) %>% 
+    evt_health <- data %>% group_by(EVTYPE) %>%
         summarise(figure = sum(FATALITIES + INJURIES, na.rm = TRUE), .groups = "drop")
-    evt_econ <- data %>% group_by(EVTYPE) %>% 
+    evt_econ <- data %>% group_by(EVTYPE) %>%
         summarise(figure = sum(PROPDMG + CROPDMG, na.rm = TRUE), .groups = "drop")
-    
+
     report(evt_health, 'Health')
-    report(evt_econ, 'Economy')
+     report(evt_econ, 'Economy')
+     
+    sort(unique(data$EVTYPE[!data$EVTYPE %in% web_keyword]))
 }
 

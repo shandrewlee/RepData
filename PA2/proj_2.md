@@ -3,7 +3,7 @@
 #### The Most Harmful Event is TORNADO, and the Greatest Economic Consequence Event is FLOOD
 
 ## Synopsis
-This report analyzes storm event data from the **[NOAA Storm Database]("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2")**. Web interface is available **[here](https://www.ncei.noaa.gov/stormevents/)**.
+This report analyzes storm event data from the **[NOAA Storm Database](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2)**. Web interface is available **[here](https://www.ncei.noaa.gov/stormevents/)**.
 
 We focus on:  
 - Health impact: Fatalities and Injuries.   
@@ -25,9 +25,11 @@ The following sections present detailed results with plots and commentary.
 ``` r
 suppressMessages(library(dplyr))
 suppressMessages(library(ggplot2))
+suppressMessages(library(stringr))
 ```
   
 #### Function 'report' is created for graphs and figures reporting wrt the scope
+Refer to the **[Exponent Interpretation](https://github.com/shandrewlee/RepData/blob/master/PA2/exp%20Interpretation.md)** for justifications
 
 ``` r
 report <- function(agg_tbl, scope){
@@ -54,6 +56,64 @@ report <- function(agg_tbl, scope){
 }
 ```
   
+  
+#### Function 'std_grammar' is create for standarding ambiguities and typos in EVTYPE
+web_keyword is extracted from NOAA website for the 48 events in search list.<br>
+custom_keyword is based on manual findings of ambiguities <br>
+Irrelevant EVTYPE are dropped from the dataset<br>
+
+``` r
+std_grammar <- function(data){
+    
+    data$EVTYPE <- toupper(data$EVTYPE)
+    
+    data$EVTYPE <- str_replace_all(data$EVTYPE, " {2,}", " ")
+    
+    #Correcting various typos for Thunderstorm Wind
+    thunderstorm_typo <- 'T.*U.*E.*M WIN.*'
+    data$EVTYPE[str_detect(toupper(data$EVTYPE), thunderstorm_typo)] <- 'THUNDERSTORM WIND'
+    
+    web_keyword <- c('ASTRONOMICAL LOW TIDE', 'AVALANCHE', 'BLIZZARD', 'COASTAL FLOOD', 'COLD/WINDHILL',
+                     'DEBRIS FLOW', 'DENSE FOG', 'DENSE SMOKE', 'DROUGHT', 'DUST DEVIL', 'DUST STORM',
+                     'EXCESSIVE HEAT', 'EXTREMEOLD/WINDHILL', 'FLASH FLOOD', 'FLOOD', 'FREEZING FOG', 
+                     'FROST/FREEZE', 'FUNNEL CLOUD', 'HAIL', 'HEAT', 'HEAVY RAIN', 'HEAVY SNOW', 
+                     'HIGH SURF', 'HIGH WIND', 'HURRICANE (TYPHOON)', 'ICE STORM', 'LAKE-EFFECT SNOW', 
+                     'LAKESHORE FLOOD', 'LIGHTNING', 'MARINE HAIL', 'MARINE HIGH WIND', 'MARINE STRONG WIND', 
+                     'MARINE THUNDERSTORM WIND', 'RIP CURRENT', 'SEICHE', 'SLEET', 'STORM SURGE/TIDE', 
+                     'STRONG WIND', 'THUNDERSTORM WIND', 'TORNADO', 'TROPICAL DEPRESSION', 'TROPICAL STORM', 
+                     'TSUNAMI', 'VOLCANIC ASH', 'WATERSPOUT', 'WILDFIRE', 'WINTER STORM', 'WINTER WEATHER')
+    
+    matches <- str_extract(toupper(data$EVTYPE), paste(web_keyword, collapse = "|"))
+    data$EVTYPE <- ifelse(!is.na(matches), matches, data$EVTYPE)
+    
+    top_set <- data[data$EVTYPE %in% web_keyword,]  #This is the set cleaned by web_keyword
+    bottom_set <- data[!data$EVTYPE %in% web_keyword,]  #This is the set to be cleaned by custom_keyword
+    
+    custom_keyword <- c('MICROBURST' = 'MICROBURST', 'AVALAN' = 'AVALANCHE',
+                        'TSTM' = 'THUNDERSTORM WIND', 'THUNDERSTORM' = 'THUNDERSTORM WIND', 
+                        'TYPHOON' = 'HURRICANE (TYPHOON)', 'HURRICANE' = 'HURRICANE (TYPHOON)',
+                        'WET' = 'WET', 'RAIN' = 'RAIN', 'SNOW' = 'SNOW', 'SHOWER' = 'SHOWER', 
+                        'MUD' = 'MUDSLIDE', 'LANDSLIDE' = 'LANDSLIDE', 'URBAN' = 'URBAN/SMALL STREAM', 
+                        'WND' = 'WIND', 'COLD' = 'COLD','LOW TEMP' = 'COLD', 'HYPOTHERMIA' = 'COLD', 
+                        'FREEZING' = 'FREEZING', 'HYPERTHERMIA' = 'HEAT', 'HIGH TEMP' = 'HEAT',
+                        'WARM' = 'HEAT', 'HOT' = 'HEAT')
+    
+    matches <- str_extract((bottom_set$EVTYPE), paste(names(custom_keyword), collapse = "|"))
+    bottom_set$EVTYPE <- ifelse(!is.na(matches), custom_keyword[matches], bottom_set$EVTYPE)
+    
+    #Dropping Irrelevant Event types
+    bottom_set <- bottom_set[!grepl(".*county.*", bottom_set$EVTYPE, ignore.case = TRUE), ]
+    bottom_set <- bottom_set[!grepl("^summary", bottom_set$EVTYPE, ignore.case = TRUE), ]
+    bottom_set <- bottom_set[!grepl("^record", bottom_set$EVTYPE, ignore.case = TRUE), ]
+    bottom_set <- bottom_set[!grepl("^monthly", bottom_set$EVTYPE, ignore.case = TRUE), ]
+    bottom_set <- bottom_set[!bottom_set$EVTYPE %in% c('?','NONE'), ]
+    
+    # Combining the separate sets again
+    data <- top_set
+    data <- bind_rows(data, bottom_set)
+}
+```
+
 ### Data Processing
 #### Download and Load the Source File
 
@@ -64,9 +124,15 @@ if (!file.exists(zip_file)){
     download.file(url, zip_file, mode="wb")
     }
 data <- read.csv(bzfile(zip_file))
+```
 
+### Extracting Effective Columns and Data Cleaning
+
+``` r
 data <- data %>% 
     select(EVTYPE, FATALITIES, INJURIES, PROPDMG, PROPDMGEXP, CROPDMG, CROPDMGEXP)
+
+data <- std_grammar(data)
 ```
   
 #### Handling Exponent Values of PROPDMGEXP and CROPDMGEXP
@@ -111,27 +177,27 @@ evt_econ <- data %>% group_by(EVTYPE) %>%
 ### Bar Charts for Health and Economy Impact
 
 ``` r
-report(evt_health, 'Health')
+report(evt_health, 'Health (FATALITIES + INJURIES)')
 ```
 
 ```
-## [1] "Total number of events: 984"
-## [1] "Events with Zero impact: 764"
-## [1] "Events with impact: 220"
-## [1] "The Event Impacting Health the Most is TORNADO"
+## [1] "Total number of events: 207"
+## [1] "Events with Zero impact: 122"
+## [1] "Events with impact: 85"
+## [1] "The Event Impacting Health (FATALITIES + INJURIES) the Most is TORNADO"
 ```
 
-![plot of chunk unnamed-chunk-6](figure/unnamed-chunk-6-1.png)
+![plot of chunk unnamed-chunk-8](figure/unnamed-chunk-8-1.png)
 
 ``` r
-report(evt_econ, 'Economy')
+report(evt_econ, 'Economy (PROPDMG + CROPDMG)')
 ```
 
 ```
-## [1] "Total number of events: 984"
-## [1] "Events with Zero impact: 553"
-## [1] "Events with impact: 431"
-## [1] "The Event Impacting Economy the Most is FLOOD"
+## [1] "Total number of events: 207"
+## [1] "Events with Zero impact: 89"
+## [1] "Events with impact: 118"
+## [1] "The Event Impacting Economy (PROPDMG + CROPDMG) the Most is FLOOD"
 ```
 
-![plot of chunk unnamed-chunk-6](figure/unnamed-chunk-6-2.png)
+![plot of chunk unnamed-chunk-8](figure/unnamed-chunk-8-2.png)
